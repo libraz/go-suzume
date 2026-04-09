@@ -1,0 +1,18 @@
+# Vendored C++ source (fetched by sync-upstream.sh)
+csuzume/
+
+# Test/coverage output
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
