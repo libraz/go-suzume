@@ -24,11 +24,12 @@ Suzume uses feature-based analysis with character patterns instead of large dict
 - **Morphological Analysis** — Tokenization with POS, base form, conjugation info, and character offsets
 - **Tag Generation** — Keyword extraction with POS filtering and lemmatization
 - **User Dictionary** — CSV and binary dictionary loading at runtime
+- **Bundled Dictionary** — Core dictionary is embedded and auto-loaded; no external files required
 - **Thread Safe** — Each instance is independent
 
 ## Prerequisites
 
-- Go 1.23+
+- Go 1.26+
 - C++17 compiler (GCC 8+, Clang 10+, Apple Clang 12+)
 - CMake 3.15+
 
@@ -100,6 +101,25 @@ opts.MaxTags = 10               // Up to 10 tags
 
 tags := s.GenerateTagsWithOptions("東京都の天気予報を確認する", opts)
 ```
+
+## Analysis Modes
+
+Use `NewWithExtendedOptions` to select the segmentation mode and toggle
+lemmatization or compound merging. Start from `DefaultExtendedOptions`, since
+the zero value of `ExtendedOptions` does not match the library defaults.
+
+```go
+opts := suzume.DefaultExtendedOptions()
+opts.Mode = suzume.ModeSearch // Finer segmentation, merges noun compounds
+
+s, err := suzume.NewWithExtendedOptions(opts)
+if err != nil {
+	log.Fatal(err)
+}
+defer s.Close()
+```
+
+Available modes: `ModeNormal` (default), `ModeSearch`, and `ModeSplit`.
 
 ## Development
 

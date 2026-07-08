@@ -90,6 +90,61 @@ type Options struct {
 	PreserveSymbols bool
 }
 
+// AnalysisMode selects how the analyzer segments text.
+type AnalysisMode int
+
+const (
+	// ModeNormal is the default segmentation mode.
+	ModeNormal AnalysisMode = 0
+
+	// ModeSearch favors finer segmentation and merges noun compounds,
+	// suited for building search indices.
+	ModeSearch AnalysisMode = 1
+
+	// ModeSplit produces the finest-grained segmentation.
+	ModeSplit AnalysisMode = 2
+)
+
+// ExtendedOptions configures the Suzume analyzer with the full option set,
+// including the analysis mode, lemmatization, and compound merging.
+//
+// The zero value does not match the library defaults: it disables
+// lemmatization and case/vu preservation. Start from DefaultExtendedOptions
+// and override only the fields you need.
+type ExtendedOptions struct {
+	// PreserveVu preserves ヴ characters (don't normalize to ビ etc.)
+	// (default: true).
+	PreserveVu bool
+
+	// PreserveCase preserves letter case (don't lowercase ASCII)
+	// (default: true).
+	PreserveCase bool
+
+	// PreserveSymbols preserves symbols/emoji in the output.
+	PreserveSymbols bool
+
+	// Mode selects the segmentation mode (default: ModeNormal).
+	Mode AnalysisMode
+
+	// Lemmatize applies lemmatization to derive base forms (default: true).
+	Lemmatize bool
+
+	// MergeCompounds merges consecutive noun compounds into a single token.
+	MergeCompounds bool
+}
+
+// DefaultExtendedOptions returns ExtendedOptions populated with the library
+// default values. Use it as a starting point and override only the fields you
+// need.
+func DefaultExtendedOptions() ExtendedOptions {
+	return ExtendedOptions{
+		PreserveVu:   true,
+		PreserveCase: true,
+		Mode:         ModeNormal,
+		Lemmatize:    true,
+	}
+}
+
 // POS filter bitmask constants for TagOptions.POSFilter.
 const (
 	POSNoun      uint8 = 1 // Filter to nouns only

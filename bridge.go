@@ -10,9 +10,18 @@ package suzume
 import "C"
 import (
 	"errors"
+	"fmt"
 	"runtime"
 	"unsafe"
 )
+
+// cBool converts a Go bool to the C int convention (1 = true, 0 = false).
+func cBool(b bool) C.int {
+	if b {
+		return 1
+	}
+	return 0
+}
 
 // Suzume is a Japanese morphological analyzer instance.
 type Suzume struct {
@@ -46,6 +55,35 @@ func NewWithOptions(opts Options) (*Suzume, error) {
 	h := C.suzume_create_with_options(&copts)
 	if h == nil {
 		return nil, errors.New("failed to create suzume instance with options")
+	}
+	s := &Suzume{handle: h}
+	runtime.SetFinalizer(s, (*Suzume).Close)
+	return s, nil
+}
+
+// NewWithExtendedOptions creates a new Suzume instance with the extended option
+// set, including the analysis mode, lemmatization, and compound merging.
+//
+// Prefer starting from DefaultExtendedOptions, since the zero value of
+// ExtendedOptions does not match the library defaults.
+func NewWithExtendedOptions(opts ExtendedOptions) (*Suzume, error) {
+	var copts C.suzume_extended_options_t
+	// Initialize size and defaults, then override every field from opts so the
+	// Go struct is the single source of truth for the caller.
+	C.suzume_init_extended_options(&copts)
+	copts.preserve_vu = cBool(opts.PreserveVu)
+	copts.preserve_case = cBool(opts.PreserveCase)
+	copts.preserve_symbols = cBool(opts.PreserveSymbols)
+	copts.mode = C.int(opts.Mode)
+	copts.lemmatize = cBool(opts.Lemmatize)
+	copts.merge_compounds = cBool(opts.MergeCompounds)
+
+	h := C.suzume_create_with_extended_options(&copts)
+	if h == nil {
+		if msg := LastError(); msg != "" {
+			return nil, fmt.Errorf("failed to create suzume instance with extended options: %s", msg)
+		}
+		return nil, errors.New("failed to create suzume instance with extended options")
 	}
 	s := &Suzume{handle: h}
 	runtime.SetFinalizer(s, (*Suzume).Close)
@@ -187,6 +225,9 @@ func (s *Suzume) LoadUserDictionary(data []byte) error {
 	cdata := (*C.char)(unsafe.Pointer(&data[0]))
 	ok := C.suzume_load_user_dict(s.handle, cdata, C.size_t(len(data)))
 	if ok == 0 {
+		if msg := LastError(); msg != "" {
+			return fmt.Errorf("failed to load user dictionary: %s", msg)
+		}
 		return errors.New("failed to load user dictionary")
 	}
 	return nil
@@ -204,14 +245,44 @@ func (s *Suzume) LoadBinaryDictionary(data []byte) error {
 	cdata := (*C.uint8_t)(unsafe.Pointer(&data[0]))
 	ok := C.suzume_load_binary_dict(s.handle, cdata, C.size_t(len(data)))
 	if ok == 0 {
+		if msg := LastError(); msg != "" {
+			return fmt.Errorf("failed to load binary dictionary: %s", msg)
+		}
 		return errors.New("failed to load binary dictionary")
 	}
 	return nil
 }
 
+// DictionaryWarnings returns the warnings accumulated while auto-loading
+// dictionaries for this instance. It returns nil when there are none.
+func (s *Suzume) DictionaryWarnings() []string {
+	if s.handle == nil {
+		return nil
+	}
+	count := int(C.suzume_dictionary_warning_count(s.handle))
+	if count == 0 {
+		return nil
+	}
+	warnings := make([]string, 0, count)
+	for i := 0; i < count; i++ {
+		w := C.suzume_dictionary_warning(s.handle, C.size_t(i))
+		if w == nil {
+			continue
+		}
+		warnings = append(warnings, C.GoString(w))
+	}
+	return warnings
+}
+
 // Version returns the Suzume library version string.
 func Version() string {
 	return C.GoString(C.suzume_version())
+}
+
+// LastError returns the last C API error message for the current thread, or an
+// empty string when none is set.
+func LastError() string {
+	return C.GoString(C.suzume_last_error())
 }
 
 // convertTags converts a C suzume_tags_t to a Go []Tag slice.

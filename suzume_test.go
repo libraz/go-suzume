@@ -576,6 +576,222 @@ func TestConcurrentInstances(t *testing.T) {
 	wg.Wait()
 }
 
+// --- Extended options ---
+
+// compoundText segments differently depending on compound merging, which lets
+// the mode/merge tests assert observable behavior instead of just construction.
+const compoundText = "東京都新宿区の高層ビル群を管理する会社"
+
+func TestDefaultExtendedOptions(t *testing.T) {
+	opts := DefaultExtendedOptions()
+
+	if !opts.PreserveVu {
+		t.Error("PreserveVu should default to true")
+	}
+	if !opts.PreserveCase {
+		t.Error("PreserveCase should default to true")
+	}
+	if !opts.Lemmatize {
+		t.Error("Lemmatize should default to true")
+	}
+	if opts.Mode != ModeNormal {
+		t.Errorf("Mode should default to ModeNormal, got %d", opts.Mode)
+	}
+	if opts.PreserveSymbols {
+		t.Error("PreserveSymbols should default to false")
+	}
+	if opts.MergeCompounds {
+		t.Error("MergeCompounds should default to false")
+	}
+}
+
+func TestNewWithExtendedOptions(t *testing.T) {
+	s, err := NewWithExtendedOptions(DefaultExtendedOptions())
+	if err != nil {
+		t.Fatalf("NewWithExtendedOptions: %v", err)
+	}
+	defer s.Close()
+
+	if len(s.Analyze(compoundText)) == 0 {
+		t.Error("expected morphemes with default extended options")
+	}
+}
+
+func TestExtendedOptionsSplitMode(t *testing.T) {
+	opts := DefaultExtendedOptions()
+	opts.Mode = ModeSplit
+	s, err := NewWithExtendedOptions(opts)
+	if err != nil {
+		t.Fatalf("NewWithExtendedOptions(split): %v", err)
+	}
+	defer s.Close()
+
+	if len(s.Analyze(compoundText)) == 0 {
+		t.Error("expected morphemes in split mode")
+	}
+}
+
+func TestExtendedOptionsSearchModeMergesCompounds(t *testing.T) {
+	base, err := NewWithExtendedOptions(DefaultExtendedOptions())
+	if err != nil {
+		t.Fatalf("NewWithExtendedOptions(default): %v", err)
+	}
+	defer base.Close()
+
+	searchOpts := DefaultExtendedOptions()
+	searchOpts.Mode = ModeSearch
+	search, err := NewWithExtendedOptions(searchOpts)
+	if err != nil {
+		t.Fatalf("NewWithExtendedOptions(search): %v", err)
+	}
+	defer search.Close()
+
+	baseCount := len(base.Analyze(compoundText))
+	searchCount := len(search.Analyze(compoundText))
+	if baseCount == 0 || searchCount == 0 {
+		t.Fatalf("expected morphemes, got base=%d search=%d", baseCount, searchCount)
+	}
+	if searchCount >= baseCount {
+		t.Errorf("search mode should merge compounds into fewer tokens: base=%d search=%d", baseCount, searchCount)
+	}
+}
+
+func TestExtendedOptionsMergeCompounds(t *testing.T) {
+	base, err := NewWithExtendedOptions(DefaultExtendedOptions())
+	if err != nil {
+		t.Fatalf("NewWithExtendedOptions(default): %v", err)
+	}
+	defer base.Close()
+
+	mergeOpts := DefaultExtendedOptions()
+	mergeOpts.MergeCompounds = true
+	merge, err := NewWithExtendedOptions(mergeOpts)
+	if err != nil {
+		t.Fatalf("NewWithExtendedOptions(merge): %v", err)
+	}
+	defer merge.Close()
+
+	baseCount := len(base.Analyze(compoundText))
+	mergeCount := len(merge.Analyze(compoundText))
+	if baseCount == 0 || mergeCount == 0 {
+		t.Fatalf("expected morphemes, got base=%d merge=%d", baseCount, mergeCount)
+	}
+	if mergeCount >= baseCount {
+		t.Errorf("MergeCompounds should reduce token count: base=%d merge=%d", baseCount, mergeCount)
+	}
+}
+
+func TestNewWithExtendedOptionsLemmatizeDisabled(t *testing.T) {
+	opts := DefaultExtendedOptions()
+	opts.Lemmatize = false
+	s, err := NewWithExtendedOptions(opts)
+	if err != nil {
+		t.Fatalf("NewWithExtendedOptions(no lemma): %v", err)
+	}
+	defer s.Close()
+
+	if len(s.Analyze(compoundText)) == 0 {
+		t.Error("expected morphemes with lemmatization disabled")
+	}
+}
+
+func TestNewWithExtendedOptionsInvalidMode(t *testing.T) {
+	opts := DefaultExtendedOptions()
+	opts.Mode = AnalysisMode(99)
+
+	s, err := NewWithExtendedOptions(opts)
+	if err == nil {
+		s.Close()
+		t.Fatal("expected error for invalid analysis mode")
+	}
+	if s != nil {
+		t.Error("expected nil instance on failure")
+	}
+	if !strings.Contains(err.Error(), "mode") {
+		t.Errorf("error should mention the invalid mode, got %q", err.Error())
+	}
+	if LastError() == "" {
+		t.Error("LastError should be populated after a failed creation")
+	}
+}
+
+func TestDictionaryWarnings(t *testing.T) {
+	s := newSuzume(t)
+
+	// A freshly created instance without problematic dictionaries reports no
+	// warnings; the call must be safe and return a usable slice regardless.
+	for _, w := range s.DictionaryWarnings() {
+		if w == "" {
+			t.Error("dictionary warning should not be empty")
+		}
+	}
+}
+
+func TestDictionaryWarningsClosed(t *testing.T) {
+	s, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+
+	if w := s.DictionaryWarnings(); w != nil {
+		t.Errorf("expected nil warnings from closed instance, got %v", w)
+	}
+}
+
+func TestLoadUserDictionarySuccess(t *testing.T) {
+	s := newSuzume(t)
+
+	const word = "フガフガ協会"
+	before := s.Analyze(word)
+	if len(before) < 2 {
+		t.Fatalf("expected %q to split into multiple tokens before registration, got %v", word, morphNames(before))
+	}
+
+	csv := word + "\tNOUN\t0.05\t" + word + "\n"
+	if err := s.LoadUserDictionary([]byte(csv)); err != nil {
+		t.Fatalf("LoadUserDictionary: %v", err)
+	}
+
+	after := s.Analyze(word)
+	if len(after) != 1 || after[0].Surface != word {
+		t.Errorf("expected %q as a single token after registration, got %v", word, morphNames(after))
+	}
+}
+
+// --- Core dictionary ---
+
+// TestCoreDictionaryLoaded guards against the embedded core.dic not being
+// discovered at runtime. Without it, "管理する" mis-segments into "管" + "理する";
+// with it, the dictionary keeps "管理" as a single noun followed by "する".
+func TestCoreDictionaryLoaded(t *testing.T) {
+	s := newSuzume(t)
+
+	morphemes := s.Analyze("高層ビル群を管理する会社")
+
+	var surfaces []string
+	for _, m := range morphemes {
+		surfaces = append(surfaces, m.Surface)
+	}
+	joined := strings.Join(surfaces, " ")
+
+	found := false
+	for _, m := range morphemes {
+		if m.Surface == "管理" && m.POS == "NOUN" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("core dictionary not loaded: expected 管理/NOUN in %q", joined)
+	}
+	for _, m := range morphemes {
+		if m.Surface == "理する" {
+			t.Errorf("core dictionary not loaded: found spurious 理する in %q", joined)
+		}
+	}
+}
+
 // --- Helpers ---
 
 // morphNames extracts surface forms for test diagnostics.
