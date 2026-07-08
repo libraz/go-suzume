@@ -1,4 +1,4 @@
-.PHONY: all lib test test-race lint fmt vet check coverage clean sync sync-local
+.PHONY: all lib test test-race lint fmt format vet check coverage clean sync sync-local
 
 all: lib test
 
@@ -21,7 +21,13 @@ lint:
 
 fmt:
 	gofmt -w .
-	goimports -w -local github.com/libraz/go-suzume .
+	@if command -v goimports >/dev/null 2>&1; then \
+		goimports -w -local github.com/libraz/go-suzume .; \
+	else \
+		echo "goimports not found; skipping import grouping (install: go install golang.org/x/tools/cmd/goimports@latest)"; \
+	fi
+
+format: fmt
 
 vet:
 	go vet ./...

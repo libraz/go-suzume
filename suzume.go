@@ -32,9 +32,6 @@ type Morpheme struct {
 	// BaseForm is the base/dictionary form (lemma).
 	BaseForm string
 
-	// Reading is the reading in katakana.
-	Reading string
-
 	// POSJa is the part of speech in Japanese (e.g. "名詞", "動詞").
 	POSJa string
 
@@ -46,6 +43,30 @@ type Morpheme struct {
 
 	// ExtendedPOS is the extended POS tag in English (e.g. "VerbRenyokei").
 	ExtendedPOS string
+
+	// Start is the start character offset in the normalized text.
+	Start int
+
+	// End is the end character offset in the normalized text.
+	End int
+
+	// IsUserDict reports whether the morpheme came from a user dictionary.
+	IsUserDict bool
+
+	// IsFormalNoun reports whether the morpheme is a formal noun (形式名詞).
+	IsFormalNoun bool
+
+	// IsLowInfo reports whether the morpheme is a low information word.
+	IsLowInfo bool
+
+	// IsUnknown reports whether the morpheme is an unknown word.
+	IsUnknown bool
+
+	// IsFromDictionary reports whether the morpheme came from a dictionary.
+	IsFromDictionary bool
+
+	// Score is the candidate score/cost assigned by the analyzer.
+	Score float32
 }
 
 // Tag represents a generated tag from text analysis.
@@ -78,6 +99,10 @@ const (
 )
 
 // TagOptions configures tag generation behavior.
+//
+// The zero value disables every exclusion filter, which differs from the
+// library defaults. Start from DefaultTagOptions and override individual
+// fields to keep the recommended filtering behavior.
 type TagOptions struct {
 	// POSFilter is a bitmask for POS filtering (0 = all).
 	// Use POSNoun, POSVerb, POSAdjective, POSAdverb constants.
@@ -86,7 +111,7 @@ type TagOptions struct {
 	// ExcludeBasic excludes basic words (hiragana-only lemma).
 	ExcludeBasic bool
 
-	// UseLemma uses lemma instead of surface form for tags.
+	// UseLemma uses lemma instead of surface form for tags (default: true).
 	UseLemma bool
 
 	// MinLength is the minimum tag length in characters (default: 2).
@@ -94,4 +119,33 @@ type TagOptions struct {
 
 	// MaxTags is the maximum number of tags to return (0 = unlimited).
 	MaxTags int
+
+	// ExcludeParticles excludes particles (助詞) (default: true).
+	ExcludeParticles bool
+
+	// ExcludeAuxiliaries excludes auxiliaries (助動詞) (default: true).
+	ExcludeAuxiliaries bool
+
+	// ExcludeFormalNouns excludes formal nouns (形式名詞) (default: true).
+	ExcludeFormalNouns bool
+
+	// ExcludeLowInfo excludes low information words (default: true).
+	ExcludeLowInfo bool
+
+	// RemoveDuplicates removes duplicate tags (default: true).
+	RemoveDuplicates bool
+}
+
+// DefaultTagOptions returns TagOptions populated with the library default
+// values. Use it as a starting point and override only the fields you need.
+func DefaultTagOptions() TagOptions {
+	return TagOptions{
+		UseLemma:           true,
+		MinLength:          2,
+		ExcludeParticles:   true,
+		ExcludeAuxiliaries: true,
+		ExcludeFormalNouns: true,
+		ExcludeLowInfo:     true,
+		RemoveDuplicates:   true,
+	}
 }

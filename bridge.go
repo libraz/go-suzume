@@ -88,12 +88,19 @@ func (s *Suzume) Analyze(text string) []Morpheme {
 	for i := 0; i < count; i++ {
 		cm := cMorphemes[i]
 		morphemes[i] = Morpheme{
-			Surface:     C.GoString(cm.surface),
-			POS:         C.GoString(cm.pos),
-			BaseForm:    C.GoString(cm.base_form),
-			Reading:     C.GoString(cm.reading),
-			POSJa:       C.GoString(cm.pos_ja),
-			ExtendedPOS: C.GoString(cm.extended_pos),
+			Surface:          C.GoString(cm.surface),
+			POS:              C.GoString(cm.pos),
+			BaseForm:         C.GoString(cm.base_form),
+			POSJa:            C.GoString(cm.pos_ja),
+			ExtendedPOS:      C.GoString(cm.extended_pos),
+			Start:            int(cm.start),
+			End:              int(cm.end),
+			IsUserDict:       cm.is_user_dict != 0,
+			IsFormalNoun:     cm.is_formal_noun != 0,
+			IsLowInfo:        cm.is_low_info != 0,
+			IsUnknown:        cm.is_unknown != 0,
+			IsFromDictionary: cm.is_from_dictionary != 0,
+			Score:            float32(cm.score),
 		}
 		if cm.conj_type != nil {
 			morphemes[i].ConjType = C.GoString(cm.conj_type)
@@ -143,6 +150,21 @@ func (s *Suzume) GenerateTagsWithOptions(text string, opts TagOptions) []Tag {
 	}
 	copts.min_length = C.size_t(opts.MinLength)
 	copts.max_tags = C.size_t(opts.MaxTags)
+	if opts.ExcludeParticles {
+		copts.exclude_particles = 1
+	}
+	if opts.ExcludeAuxiliaries {
+		copts.exclude_auxiliaries = 1
+	}
+	if opts.ExcludeFormalNouns {
+		copts.exclude_formal_nouns = 1
+	}
+	if opts.ExcludeLowInfo {
+		copts.exclude_low_info = 1
+	}
+	if opts.RemoveDuplicates {
+		copts.remove_duplicates = 1
+	}
 
 	result := C.suzume_generate_tags_with_options(s.handle, ctext, &copts)
 	if result == nil {

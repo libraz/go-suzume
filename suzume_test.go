@@ -417,6 +417,73 @@ func TestGenerateTagsPOSFilterCombined(t *testing.T) {
 	}
 }
 
+func TestAnalyzeMorphemeOffsets(t *testing.T) {
+	s := newSuzume(t)
+
+	morphemes := s.Analyze("東京都に住んでいます")
+	if len(morphemes) == 0 {
+		t.Fatal("expected morphemes")
+	}
+
+	prevEnd := 0
+	dictHit := false
+	for i, m := range morphemes {
+		if m.Start > m.End {
+			t.Errorf("morpheme %d %q: Start=%d greater than End=%d", i, m.Surface, m.Start, m.End)
+		}
+		if m.Start < prevEnd {
+			t.Errorf("morpheme %d %q: Start=%d overlaps previous End=%d", i, m.Surface, m.Start, prevEnd)
+		}
+		prevEnd = m.End
+		if m.IsFromDictionary {
+			dictHit = true
+		}
+	}
+
+	if !dictHit {
+		t.Error("expected at least one morpheme flagged IsFromDictionary")
+	}
+}
+
+func TestDefaultTagOptions(t *testing.T) {
+	opts := DefaultTagOptions()
+
+	if !opts.UseLemma {
+		t.Error("UseLemma should default to true")
+	}
+	if opts.MinLength != 2 {
+		t.Errorf("MinLength should default to 2, got %d", opts.MinLength)
+	}
+	if !opts.ExcludeParticles || !opts.ExcludeAuxiliaries ||
+		!opts.ExcludeFormalNouns || !opts.ExcludeLowInfo {
+		t.Error("exclusion filters should default to true")
+	}
+	if !opts.RemoveDuplicates {
+		t.Error("RemoveDuplicates should default to true")
+	}
+}
+
+func TestGenerateTagsWithDefaultOptions(t *testing.T) {
+	s := newSuzume(t)
+
+	opts := DefaultTagOptions()
+	opts.POSFilter = POSNoun
+	opts.MaxTags = 5
+
+	tags := s.GenerateTagsWithOptions("東京都の天気予報を確認する", opts)
+	if len(tags) == 0 {
+		t.Fatal("expected tags, got none")
+	}
+	if len(tags) > 5 {
+		t.Errorf("expected at most 5 tags, got %d", len(tags))
+	}
+	for _, tag := range tags {
+		if tag.POS != "NOUN" {
+			t.Errorf("expected POS=NOUN with noun filter, got %q", tag.POS)
+		}
+	}
+}
+
 // --- Dictionary loading ---
 
 func TestLoadUserDictionaryErrors(t *testing.T) {

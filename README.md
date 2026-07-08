@@ -21,7 +21,7 @@ Suzume uses feature-based analysis with character patterns instead of large dict
 
 ### Features
 
-- **Morphological Analysis** — Tokenization with POS, base form, reading, and conjugation info
+- **Morphological Analysis** — Tokenization with POS, base form, conjugation info, and character offsets
 - **Tag Generation** — Keyword extraction with POS filtering and lemmatization
 - **User Dictionary** — CSV and binary dictionary loading at runtime
 - **Thread Safe** — Each instance is independent
@@ -89,14 +89,16 @@ func main() {
 
 ## Tag Generation Options
 
+Start from `DefaultTagOptions` to keep the library's default filtering, then
+override only the fields you need. The zero value of `TagOptions` disables every
+exclusion filter.
+
 ```go
-tags := s.GenerateTagsWithOptions("東京都の天気予報を確認する", suzume.TagOptions{
-	POSFilter:    suzume.POSNoun,  // Nouns only
-	ExcludeBasic: true,            // Skip basic words
-	UseLemma:     true,            // Use dictionary form
-	MinLength:    2,               // Min 2 characters
-	MaxTags:      10,              // Up to 10 tags
-})
+opts := suzume.DefaultTagOptions()
+opts.POSFilter = suzume.POSNoun // Nouns only
+opts.MaxTags = 10               // Up to 10 tags
+
+tags := s.GenerateTagsWithOptions("東京都の天気予報を確認する", opts)
 ```
 
 ## Development
