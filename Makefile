@@ -11,7 +11,7 @@ csuzume/data/core.dic: csuzume/build/lib/libsuzume.a
 	cd csuzume && cmake --build build --target build-dict
 
 csuzume/build/lib/libsuzume.a: csuzume/CMakeLists.txt
-	cd csuzume && cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF && cmake --build build -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu)
+	cd csuzume && cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DSUZUME_INSTALL=OFF && cmake --build build -j$$(nproc 2>/dev/null || sysctl -n hw.ncpu)
 
 csuzume/CMakeLists.txt:
 	./sync-upstream.sh

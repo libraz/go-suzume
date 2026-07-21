@@ -1,10 +1,10 @@
 package suzume
 
 /*
-#cgo CXXFLAGS: -std=c++17 -I${SRCDIR}/csuzume/src
-#cgo LDFLAGS: -L${SRCDIR}/csuzume/build/lib -lsuzume -lsuzume_analysis -lsuzume_postprocess -lsuzume_grammar -lsuzume_dictionary -lsuzume_normalize -lsuzume_pretokenizer -lsuzume_core -lstdc++ -lm
+#cgo CFLAGS: -I${SRCDIR}/csuzume/include -DSUZUME_STATIC
+#cgo LDFLAGS: -L${SRCDIR}/csuzume/build/lib -lsuzume -lstdc++ -lm
 #cgo darwin LDFLAGS: -framework CoreFoundation
-#include "csuzume/src/suzume_c.h"
+#include "suzume/suzume_c.h"
 #include <stdlib.h>
 */
 import "C"
@@ -15,8 +15,8 @@ import (
 	"unsafe"
 )
 
-// cBool converts a Go bool to the C int convention (1 = true, 0 = false).
-func cBool(b bool) C.int {
+// cBool converts a Go bool to the C uint8 convention (1 = true, 0 = false).
+func cBool(b bool) C.uint8_t {
 	if b {
 		return 1
 	}
@@ -39,21 +39,22 @@ func New() (*Suzume, error) {
 	return s, nil
 }
 
-// NewWithOptions creates a new Suzume instance with the given options.
+// NewWithOptions creates a new Suzume instance with the given normalization
+// options. It builds on the extended option set, keeping the library defaults
+// for the analysis mode and lemmatization while applying the normalization
+// toggles from opts. Use NewWithExtendedOptions for full control.
 func NewWithOptions(opts Options) (*Suzume, error) {
-	var copts C.suzume_options_t
-	if opts.PreserveVu {
-		copts.preserve_vu = 1
-	}
-	if opts.PreserveCase {
-		copts.preserve_case = 1
-	}
-	if opts.PreserveSymbols {
-		copts.preserve_symbols = 1
-	}
+	var copts C.suzume_extended_options_t
+	C.suzume_init_extended_options(&copts)
+	copts.preserve_vu = cBool(opts.PreserveVu)
+	copts.preserve_case = cBool(opts.PreserveCase)
+	copts.preserve_symbols = cBool(opts.PreserveSymbols)
 
-	h := C.suzume_create_with_options(&copts)
+	h := C.suzume_create_with_extended_options(&copts)
 	if h == nil {
+		if msg := LastError(); msg != "" {
+			return nil, fmt.Errorf("failed to create suzume instance with options: %s", msg)
+		}
 		return nil, errors.New("failed to create suzume instance with options")
 	}
 	s := &Suzume{handle: h}
@@ -68,13 +69,13 @@ func NewWithOptions(opts Options) (*Suzume, error) {
 // ExtendedOptions does not match the library defaults.
 func NewWithExtendedOptions(opts ExtendedOptions) (*Suzume, error) {
 	var copts C.suzume_extended_options_t
-	// Initialize size and defaults, then override every field from opts so the
-	// Go struct is the single source of truth for the caller.
+	// Initialize defaults, then override every field from opts so the Go struct
+	// is the single source of truth for the caller.
 	C.suzume_init_extended_options(&copts)
 	copts.preserve_vu = cBool(opts.PreserveVu)
 	copts.preserve_case = cBool(opts.PreserveCase)
 	copts.preserve_symbols = cBool(opts.PreserveSymbols)
-	copts.mode = C.int(opts.Mode)
+	copts.mode = C.uint8_t(opts.Mode)
 	copts.lemmatize = cBool(opts.Lemmatize)
 	copts.merge_compounds = cBool(opts.MergeCompounds)
 
@@ -125,26 +126,28 @@ func (s *Suzume) Analyze(text string) []Morpheme {
 
 	for i := 0; i < count; i++ {
 		cm := cMorphemes[i]
+		pos := uint8(cm.pos)
+		flags := uint8(cm.flags)
 		morphemes[i] = Morpheme{
 			Surface:          C.GoString(cm.surface),
-			POS:              C.GoString(cm.pos),
+			POS:              posEnglish(pos),
 			BaseForm:         C.GoString(cm.base_form),
-			POSJa:            C.GoString(cm.pos_ja),
-			ExtendedPOS:      C.GoString(cm.extended_pos),
+			POSJa:            posJapanese(pos),
+			ExtendedPOS:      extendedPOS(uint8(cm.extended_pos)),
 			Start:            int(cm.start),
 			End:              int(cm.end),
-			IsUserDict:       cm.is_user_dict != 0,
-			IsFormalNoun:     cm.is_formal_noun != 0,
-			IsLowInfo:        cm.is_low_info != 0,
-			IsUnknown:        cm.is_unknown != 0,
-			IsFromDictionary: cm.is_from_dictionary != 0,
+			IsUserDict:       flags&uint8(C.SUZUME_MORPHEME_USER_DICT) != 0,
+			IsFormalNoun:     flags&uint8(C.SUZUME_MORPHEME_FORMAL_NOUN) != 0,
+			IsLowInfo:        flags&uint8(C.SUZUME_MORPHEME_LOW_INFO) != 0,
+			IsUnknown:        flags&uint8(C.SUZUME_MORPHEME_UNKNOWN) != 0,
+			IsFromDictionary: flags&uint8(C.SUZUME_MORPHEME_FROM_DICTIONARY) != 0,
 			Score:            float32(cm.score),
 		}
-		if cm.conj_type != nil {
-			morphemes[i].ConjType = C.GoString(cm.conj_type)
-		}
-		if cm.conj_form != nil {
-			morphemes[i].ConjForm = C.GoString(cm.conj_form)
+		// Conjugation applies only to verbs (POS 2) and adjectives (POS 3);
+		// other parts of speech leave the conjugation fields empty.
+		if pos == uint8(C.SUZUME_POS_VERB) || pos == uint8(C.SUZUME_POS_ADJECTIVE) {
+			morphemes[i].ConjType = conjugationType(uint8(cm.conjugation_type))
+			morphemes[i].ConjForm = conjugationForm(uint8(cm.conjugation_form))
 		}
 	}
 
@@ -299,7 +302,7 @@ func convertTags(result *C.suzume_tags_t) []Tag {
 	for i := 0; i < count; i++ {
 		tags[i] = Tag{
 			Tag: C.GoString(cTags[i]),
-			POS: C.GoString(cPOS[i]),
+			POS: posEnglish(uint8(cPOS[i])),
 		}
 	}
 	return tags

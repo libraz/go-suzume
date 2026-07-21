@@ -20,19 +20,19 @@ if [ "${1:-}" = "--local" ]; then
     rm -rf "$DEST"
     mkdir -p "$DEST"
     cp -R "$LOCAL_SRC/src" "$DEST/src"
+    cp -R "$LOCAL_SRC/include" "$DEST/include"
     cp -R "$LOCAL_SRC/data" "$DEST/data"
     cp "$LOCAL_SRC/CMakeLists.txt" "$DEST/"
-    cp "$LOCAL_SRC/package.json" "$DEST/"
 else
     echo "Cloning from $REPO ..."
     rm -rf "$DEST"
     git clone --depth 1 "$REPO" "$DEST"
-    # Remove unnecessary files
-    rm -rf "$DEST/.git" "$DEST/.github" "$DEST/js" "$DEST/tests" \
-           "$DEST/benchmarks" "$DEST/docs" "$DEST/node_modules" \
-           "$DEST/.gitignore" "$DEST/.clang-format" "$DEST/Makefile" \
-           "$DEST/vitest*" "$DEST/tsconfig*" "$DEST/biome*" \
-           "$DEST/binding.gyp" "$DEST/wasm" "$DEST/native"
+    # Keep only the C++ sources, public headers, dictionaries, and the top-level
+    # CMake project; drop bindings, tests, tooling, and CI scaffolding.
+    rm -rf "$DEST/.git" "$DEST/.github" "$DEST/bindings" "$DEST/tests" \
+           "$DEST/benchmarks" "$DEST/docs" "$DEST/examples" "$DEST/scripts" \
+           "$DEST/cmake" "$DEST/node_modules" "$DEST/.gitignore" \
+           "$DEST/.clang-format" "$DEST/Makefile"
 fi
 
 echo "Done. Run 'make lib' to build."

@@ -41,7 +41,7 @@ type Morpheme struct {
 	// ConjForm is the conjugation form in Japanese (only for verbs/adjectives).
 	ConjForm string
 
-	// ExtendedPOS is the extended POS tag in English (e.g. "VerbRenyokei").
+	// ExtendedPOS is the stable extended POS code (e.g. "VERB_連用").
 	ExtendedPOS string
 
 	// Start is the start character offset in the normalized text.

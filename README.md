@@ -2,7 +2,7 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/libraz/go-suzume/ci.yml?branch=main&label=CI)](https://github.com/libraz/go-suzume/actions)
 [![Go Reference](https://pkg.go.dev/badge/github.com/libraz/go-suzume.svg)](https://pkg.go.dev/github.com/libraz/go-suzume)
-[![Go](https://img.shields.io/badge/go-%E2%89%A51.23-00ADD8?logo=go)](https://go.dev/)
+[![Go](https://img.shields.io/badge/go-%E2%89%A51.26-00ADD8?logo=go)](https://go.dev/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![CGO](https://img.shields.io/badge/requires-CGO-orange)](https://pkg.go.dev/cmd/cgo)
 
@@ -17,7 +17,7 @@ Suzume uses feature-based analysis with character patterns instead of large dict
 | **Dictionary** | 20-50MB+ | <400KB |
 | **Unknown words** | Poor | Feature-based |
 | **Setup** | Complex | Zero-config |
-| **Binding** | C | C / WASM / Go (CGO) |
+| **Binding** | C | C / WASM / Python / Go (CGO) |
 
 ### Features
 
@@ -25,7 +25,7 @@ Suzume uses feature-based analysis with character patterns instead of large dict
 - **Tag Generation** — Keyword extraction with POS filtering and lemmatization
 - **User Dictionary** — CSV and binary dictionary loading at runtime
 - **Bundled Dictionary** — Core dictionary is embedded and auto-loaded; no external files required
-- **Thread Safe** — Each instance is independent
+- **Concurrency** — Separate instances run concurrently; a single instance is not safe for concurrent calls
 
 ## Prerequisites
 

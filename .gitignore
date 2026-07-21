@@ -1,6 +1,9 @@
 # Vendored C++ source (fetched by sync-upstream.sh)
 csuzume/
 
+# Internal notes / investigation scratch
+backup/
+
 # Test/coverage output
 *.test
 *.out
