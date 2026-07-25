@@ -22,13 +22,20 @@ if [ "${1:-}" = "--local" ]; then
     cp -R "$LOCAL_SRC/src" "$DEST/src"
     cp -R "$LOCAL_SRC/include" "$DEST/include"
     cp -R "$LOCAL_SRC/data" "$DEST/data"
+    # tools/ holds the native CLI that compiles the TSV dictionaries into the
+    # .dic files embedded by embed.go, so it is part of the vendored tree.
+    # Older upstream checkouts keep that CLI under src/, which is copied above.
+    if [ -d "$LOCAL_SRC/tools" ]; then
+        cp -R "$LOCAL_SRC/tools" "$DEST/tools"
+    fi
     cp "$LOCAL_SRC/CMakeLists.txt" "$DEST/"
 else
     echo "Cloning from $REPO ..."
     rm -rf "$DEST"
     git clone --depth 1 "$REPO" "$DEST"
-    # Keep only the C++ sources, public headers, dictionaries, and the top-level
-    # CMake project; drop bindings, tests, tooling, and CI scaffolding.
+    # Keep only the C++ sources, public headers, dictionaries, the dictionary
+    # compiler under tools/, and the top-level CMake project; drop bindings,
+    # tests, docs, and CI scaffolding.
     rm -rf "$DEST/.git" "$DEST/.github" "$DEST/bindings" "$DEST/tests" \
            "$DEST/benchmarks" "$DEST/docs" "$DEST/examples" "$DEST/scripts" \
            "$DEST/cmake" "$DEST/node_modules" "$DEST/.gitignore" \
