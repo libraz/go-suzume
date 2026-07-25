@@ -742,7 +742,7 @@ func TestDictionaryWarningsClosed(t *testing.T) {
 func TestLoadUserDictionarySuccess(t *testing.T) {
 	s := newSuzume(t)
 
-	const word = "フガフガ協会"
+	const word = "ゲリラ豪雨"
 	before := s.Analyze(word)
 	if len(before) < 2 {
 		t.Fatalf("expected %q to split into multiple tokens before registration, got %v", word, morphNames(before))
@@ -755,7 +755,10 @@ func TestLoadUserDictionarySuccess(t *testing.T) {
 
 	after := s.Analyze(word)
 	if len(after) != 1 || after[0].Surface != word {
-		t.Errorf("expected %q as a single token after registration, got %v", word, morphNames(after))
+		t.Fatalf("expected %q as a single token after registration, got %v", word, morphNames(after))
+	}
+	if !after[0].IsUserDict {
+		t.Errorf("expected %q to be flagged IsUserDict", word)
 	}
 }
 
