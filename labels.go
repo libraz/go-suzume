@@ -146,6 +146,10 @@ var conjugationTypeLabels = [...]string{
 	"サ変",
 	"カ変",
 	"形容詞",
+	"形容動詞",
+	"感動詞",
+	"固有名詞(姓)",
+	"固有名詞(名)",
 }
 
 // conjugationFormLabels maps a suzume_conjugation_form_t code to its Japanese label.
