@@ -1,6 +1,7 @@
 package suzume
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"sync"
@@ -603,6 +604,15 @@ func TestDefaultExtendedOptions(t *testing.T) {
 	if opts.MergeCompounds {
 		t.Error("MergeCompounds should default to false")
 	}
+	if opts.SkipUserDictionary || opts.SkipCoreDictionary {
+		t.Error("the bundled dictionaries should be loaded by default")
+	}
+	if opts.ReportScorerConfig || opts.SkipEnvConfig {
+		t.Error("scorer configuration toggles should default to false")
+	}
+	if opts.ScorerOptionsJSON != "" || opts.DataDirectory != "" {
+		t.Error("scorer overrides and the data directory should default to unset")
+	}
 }
 
 func TestNewWithExtendedOptions(t *testing.T) {
@@ -710,8 +720,13 @@ func TestNewWithExtendedOptionsInvalidMode(t *testing.T) {
 	if !strings.Contains(err.Error(), "mode") {
 		t.Errorf("error should mention the invalid mode, got %q", err.Error())
 	}
-	if LastError() == "" {
-		t.Error("LastError should be populated after a failed creation")
+
+	var serr *Error
+	if !errors.As(err, &serr) {
+		t.Fatalf("expected a *suzume.Error, got %T", err)
+	}
+	if serr.Code != ErrorCodeInvalidInput {
+		t.Errorf("expected ErrorCodeInvalidInput, got %d", serr.Code)
 	}
 }
 
@@ -792,6 +807,305 @@ func TestCoreDictionaryLoaded(t *testing.T) {
 		if m.Surface == "理する" {
 			t.Errorf("core dictionary not loaded: found spurious 理する in %q", joined)
 		}
+	}
+}
+
+// --- Normalized text ---
+
+func TestAnalyzeWithNormalizedText(t *testing.T) {
+	s := newSuzume(t)
+
+	result := s.AnalyzeWithNormalizedText("東京都に住んでいます")
+	if len(result.Morphemes) == 0 {
+		t.Fatal("expected morphemes")
+	}
+	if result.NormalizedText == "" {
+		t.Fatal("expected normalized text")
+	}
+
+	// Start and End are character offsets into the normalized text, so slicing
+	// it must reproduce each surface form exactly.
+	runes := []rune(result.NormalizedText)
+	for _, m := range result.Morphemes {
+		if m.End > len(runes) {
+			t.Fatalf("morpheme %q ends at %d, past the %d characters of normalized text", m.Surface, m.End, len(runes))
+		}
+		if got := string(runes[m.Start:m.End]); got != m.Surface {
+			t.Errorf("normalized text [%d:%d] is %q, want surface %q", m.Start, m.End, got, m.Surface)
+		}
+	}
+}
+
+func TestAnalyzeWithNormalizedTextAfterClose(t *testing.T) {
+	s, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+
+	result := s.AnalyzeWithNormalizedText("テスト")
+	if result.NormalizedText != "" || result.Morphemes != nil {
+		t.Errorf("expected an empty result after close, got %+v", result)
+	}
+}
+
+// --- Conjugation ---
+
+// TestAnalyzeConjugatableAuxiliary guards the conjugation fields being driven by
+// the analyzer's own flag rather than by a part-of-speech test in this package:
+// auxiliaries conjugate too, so restricting the fields to verbs and adjectives
+// would drop their forms.
+func TestAnalyzeConjugatableAuxiliary(t *testing.T) {
+	s := newSuzume(t)
+
+	morphemes := s.Analyze("東京都に住んでいます")
+	found := false
+	for _, m := range morphemes {
+		if m.POS != "AUX" {
+			continue
+		}
+		found = true
+		if !m.IsConjugatable {
+			t.Errorf("auxiliary %q should be flagged IsConjugatable", m.Surface)
+		}
+		if m.ConjForm == "" {
+			t.Errorf("auxiliary %q should have ConjForm", m.Surface)
+		}
+	}
+	if !found {
+		t.Errorf("expected an AUX morpheme, got: %v", morphNames(morphemes))
+	}
+}
+
+func TestConjugationLabelsComeFromLibrary(t *testing.T) {
+	s := newSuzume(t)
+
+	morphemes := s.Analyze("東京都に住んでいます")
+	for _, m := range morphemes {
+		if !m.IsConjugatable {
+			if m.ConjType != "" || m.ConjForm != "" {
+				t.Errorf("%q does not conjugate but has type %q form %q", m.Surface, m.ConjType, m.ConjForm)
+			}
+			continue
+		}
+		if m.POS == "VERB" && m.ConjType == "" {
+			t.Errorf("verb %q should have ConjType", m.Surface)
+		}
+	}
+
+	// The label tables are read from the C ABI, so a code the analyzer emits
+	// always decodes; an unknown code falls back rather than indexing past the
+	// table.
+	if got := conjugationType(0); got != "" {
+		t.Errorf("conjugation type 0 means none, got %q", got)
+	}
+	if got := conjugationType(255); got != "" {
+		t.Errorf("out-of-range conjugation type should decode to empty, got %q", got)
+	}
+	if got := extendedPOS(255); got != "UNKNOWN" {
+		t.Errorf("out-of-range extended POS should decode to UNKNOWN, got %q", got)
+	}
+	if got := posEnglish(255); got != "OTHER" {
+		t.Errorf("out-of-range POS should decode to OTHER, got %q", got)
+	}
+}
+
+// --- Mode ---
+
+func TestMode(t *testing.T) {
+	s := newSuzume(t)
+	if got := s.Mode(); got != ModeNormal {
+		t.Errorf("default mode should be ModeNormal, got %d", got)
+	}
+}
+
+func TestModeAfterClose(t *testing.T) {
+	s, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+
+	if got := s.Mode(); got != ModeInvalid {
+		t.Errorf("closed instance should report ModeInvalid, got %d", got)
+	}
+	if err := s.SetMode(ModeSearch); err == nil {
+		t.Error("expected error from SetMode after close")
+	}
+}
+
+func TestSetMode(t *testing.T) {
+	s := newSuzume(t)
+
+	baseCount := len(s.Analyze(compoundText))
+	if baseCount == 0 {
+		t.Fatal("expected morphemes in normal mode")
+	}
+
+	if err := s.SetMode(ModeSearch); err != nil {
+		t.Fatalf("SetMode(ModeSearch): %v", err)
+	}
+	if got := s.Mode(); got != ModeSearch {
+		t.Errorf("Mode should report ModeSearch, got %d", got)
+	}
+
+	searchCount := len(s.Analyze(compoundText))
+	if searchCount == 0 {
+		t.Fatal("expected morphemes in search mode")
+	}
+	if searchCount >= baseCount {
+		t.Errorf("search mode should merge compounds into fewer tokens: normal=%d search=%d", baseCount, searchCount)
+	}
+}
+
+func TestSetModeInvalid(t *testing.T) {
+	s := newSuzume(t)
+
+	err := s.SetMode(AnalysisMode(99))
+	if err == nil {
+		t.Fatal("expected error for invalid analysis mode")
+	}
+	if !strings.Contains(err.Error(), "mode") {
+		t.Errorf("error should mention the invalid mode, got %q", err.Error())
+	}
+	if got := s.Mode(); got != ModeNormal {
+		t.Errorf("a rejected SetMode should leave the mode unchanged, got %d", got)
+	}
+}
+
+// --- Error codes ---
+
+func TestErrorCode(t *testing.T) {
+	s := newSuzume(t)
+
+	err := s.LoadBinaryDictionary([]byte("not a valid dictionary"))
+	if err == nil {
+		t.Fatal("expected error for invalid dictionary data")
+	}
+
+	var serr *Error
+	if !errors.As(err, &serr) {
+		t.Fatalf("expected a *suzume.Error, got %T", err)
+	}
+	if serr.Code == ErrorCodeSuccess {
+		t.Error("a failure should carry a non-success error code")
+	}
+	if serr.Message == "" {
+		t.Error("error message should not be empty")
+	}
+}
+
+// --- Dictionary lifecycle ---
+
+func TestLoadUserDictionaryCount(t *testing.T) {
+	s := newSuzume(t)
+
+	installed, err := s.LoadUserDictionaryCount([]byte("ゲリラ豪雨\tNOUN\n集中豪雨\tNOUN\n"))
+	if err != nil {
+		t.Fatalf("LoadUserDictionaryCount: %v", err)
+	}
+	if installed != 2 {
+		t.Errorf("expected 2 installed entries, got %d", installed)
+	}
+}
+
+func TestClearUserDictionaries(t *testing.T) {
+	s := newSuzume(t)
+
+	const word = "ゲリラ豪雨"
+	if err := s.LoadUserDictionary([]byte(word + "\tNOUN\t0.05\t" + word + "\n")); err != nil {
+		t.Fatalf("LoadUserDictionary: %v", err)
+	}
+	if got := s.Analyze(word); len(got) != 1 {
+		t.Fatalf("expected %q as a single token after registration, got %v", word, morphNames(got))
+	}
+
+	if err := s.ClearUserDictionaries(); err != nil {
+		t.Fatalf("ClearUserDictionaries: %v", err)
+	}
+	if got := s.Analyze(word); len(got) < 2 {
+		t.Errorf("expected %q to split again after clearing, got %v", word, morphNames(got))
+	}
+}
+
+func TestClearUserDictionariesAfterClose(t *testing.T) {
+	s, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+
+	if err := s.ClearUserDictionaries(); err == nil {
+		t.Error("expected error from ClearUserDictionaries after close")
+	}
+}
+
+func TestHasCoreDictionary(t *testing.T) {
+	s := newSuzume(t)
+	if !s.HasCoreDictionary() {
+		t.Error("expected the embedded core dictionary to be loaded")
+	}
+}
+
+func TestHasCoreDictionaryAfterClose(t *testing.T) {
+	s, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+
+	if s.HasCoreDictionary() {
+		t.Error("closed instance should not report a core dictionary")
+	}
+}
+
+func TestExtendedOptionsSkipCoreDictionary(t *testing.T) {
+	opts := DefaultExtendedOptions()
+	opts.SkipCoreDictionary = true
+	s, err := NewWithExtendedOptions(opts)
+	if err != nil {
+		t.Fatalf("NewWithExtendedOptions(skip core): %v", err)
+	}
+	defer s.Close()
+
+	if s.HasCoreDictionary() {
+		t.Error("SkipCoreDictionary should leave the core dictionary unloaded")
+	}
+	if len(s.Analyze(compoundText)) == 0 {
+		t.Error("analysis should still work without the core dictionary")
+	}
+}
+
+func TestExtendedOptionsDataDirectory(t *testing.T) {
+	opts := DefaultExtendedOptions()
+	opts.DataDirectory = t.TempDir()
+	s, err := NewWithExtendedOptions(opts)
+	if err != nil {
+		t.Fatalf("NewWithExtendedOptions(data directory): %v", err)
+	}
+	defer s.Close()
+
+	// An empty directory is loaded exclusively, so the embedded dictionaries
+	// are not picked up and the analyzer reports that as a warning.
+	if s.HasCoreDictionary() {
+		t.Error("an empty data directory should leave the core dictionary unloaded")
+	}
+	if len(s.DictionaryWarnings()) == 0 {
+		t.Error("expected a warning about the missing dictionaries")
+	}
+}
+
+func TestExtendedOptionsReportScorerConfig(t *testing.T) {
+	opts := DefaultExtendedOptions()
+	opts.ReportScorerConfig = true
+	s, err := NewWithExtendedOptions(opts)
+	if err != nil {
+		t.Fatalf("NewWithExtendedOptions(report scorer config): %v", err)
+	}
+	defer s.Close()
+
+	if len(s.DictionaryWarnings()) == 0 {
+		t.Error("ReportScorerConfig should add scorer diagnostics to the warnings")
 	}
 }
 
