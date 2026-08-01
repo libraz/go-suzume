@@ -38,3 +38,13 @@ linters:
         - dupImport
         - unnecessaryDefer
         - rangeValCopy
+
+  exclusions:
+    rules:
+      # Passing a struct that contains pointer fields to C makes cgo rewrite the
+      # call into a `_cgoCheckPointer(arg, 0 == 0)` guard. The tautology is in
+      # generated code but is reported against the file that made the call.
+      - path: bridge\.go
+        linters:
+          - gocritic
+        text: dupSubExpr
