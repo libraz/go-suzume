@@ -295,6 +295,42 @@ func TestOptionsPreserveSymbols(t *testing.T) {
 	}
 }
 
+func TestSymbolTokensByOption(t *testing.T) {
+	sDefault := newSuzume(t)
+	sPreserve, err := NewWithOptions(Options{PreserveSymbols: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sPreserve.Close()
+
+	posBySurface := func(morphs []Morpheme) map[string]string {
+		m := make(map[string]string, len(morphs))
+		for _, mo := range morphs {
+			m[mo.Surface] = mo.POS
+		}
+		return m
+	}
+	input := "価格は€100、😀です。"
+	def := posBySurface(sDefault.Analyze(input))
+	pre := posBySurface(sPreserve.Analyze(input))
+
+	// Currency and emoji carry text, so they are kept as OTHER either way.
+	for _, s := range []string{"€", "😀"} {
+		if def[s] != "OTHER" || pre[s] != "OTHER" {
+			t.Errorf("%q: default POS %q, preserve POS %q; want OTHER for both", s, def[s], pre[s])
+		}
+	}
+	// Punctuation is the only class PreserveSymbols controls.
+	for _, s := range []string{"、", "。"} {
+		if _, ok := def[s]; ok {
+			t.Errorf("%q should be dropped under default options", s)
+		}
+		if pre[s] != "SYMBOL" {
+			t.Errorf("%q: preserve POS %q, want SYMBOL", s, pre[s])
+		}
+	}
+}
+
 // --- GenerateTags ---
 
 func TestGenerateTags(t *testing.T) {

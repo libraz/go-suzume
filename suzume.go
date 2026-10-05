@@ -103,7 +103,8 @@ type Options struct {
 	// PreserveCase preserves letter case (don't lowercase ASCII).
 	PreserveCase bool
 
-	// PreserveSymbols preserves symbols/emoji in the output.
+	// PreserveSymbols keeps punctuation-like symbol tokens in the output;
+	// currency, unit and emoji code points are always emitted with POS "OTHER".
 	PreserveSymbols bool
 }
 
@@ -140,7 +141,8 @@ type ExtendedOptions struct {
 	// (default: true).
 	PreserveCase bool
 
-	// PreserveSymbols preserves symbols/emoji in the output.
+	// PreserveSymbols keeps punctuation-like symbol tokens in the output;
+	// currency, unit and emoji code points are always emitted with POS "OTHER".
 	PreserveSymbols bool
 
 	// Mode selects the segmentation mode (default: ModeNormal).
