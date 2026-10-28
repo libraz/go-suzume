@@ -35,7 +35,7 @@ Suzume は大きな辞書ファイルではなく、文字パターンによる�
 ## 前提条件
 
 - Go 1.26 以降
-- C++17 コンパイラ (GCC 8+, Clang 10+, Apple Clang 12+)
+- C++17 コンパイラ (GCC 9+, Clang 10+, Apple Clang 12+)
 - CMake 3.15 以降
 
 ## インストール
@@ -77,7 +77,7 @@ func main() {
 	}
 	defer s.Close()
 
-	// 形態素解析
+	// トークン化
 	morphemes := s.Analyze("東京都に住んでいます")
 	for _, m := range morphemes {
 		fmt.Printf("%s\t%s\t%s\n", m.Surface, m.POS, m.BaseForm)

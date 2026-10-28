@@ -40,7 +40,7 @@ for examples and trade-offs.
 ## Prerequisites
 
 - Go 1.26+
-- C++17 compiler (GCC 8+, Clang 10+, Apple Clang 12+)
+- C++17 compiler (GCC 9+, Clang 10+, Apple Clang 12+)
 - CMake 3.15+
 
 ## Installation
@@ -86,7 +86,7 @@ func main() {
 	}
 	defer s.Close()
 
-	// Morphological analysis
+	// Tokenize
 	morphemes := s.Analyze("東京都に住んでいます")
 	for _, m := range morphemes {
 		fmt.Printf("%s\t%s\t%s\n", m.Surface, m.POS, m.BaseForm)

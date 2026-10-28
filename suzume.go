@@ -1,4 +1,4 @@
-// Package suzume provides Go bindings for the Suzume Japanese morphological analyzer.
+// Package suzume provides Go bindings for the Suzume Japanese tokenizer.
 //
 // Suzume is a lightweight Japanese tokenizer that uses feature-based analysis
 // with a small dictionary (<400KB), providing POS tagging and lemmatization
@@ -21,7 +21,7 @@
 //	}
 package suzume
 
-// Morpheme represents a single morphological analysis result.
+// Morpheme represents a single token in an analysis result.
 type Morpheme struct {
 	// Surface is the surface form as it appears in the text.
 	Surface string

@@ -120,7 +120,7 @@ func cText(text string) (*C.char, C.size_t) {
 	return (*C.char)(unsafe.Pointer(unsafe.StringData(text))), C.size_t(len(text))
 }
 
-// Suzume is a Japanese morphological analyzer instance.
+// Suzume is a Japanese tokenizer instance.
 type Suzume struct {
 	handle C.suzume_t
 }
@@ -217,12 +217,12 @@ func (s *Suzume) SetMode(mode AnalysisMode) error {
 	})
 }
 
-// Analyze performs morphological analysis on the given Japanese text.
+// Analyze tokenizes the given Japanese text.
 func (s *Suzume) Analyze(text string) []Morpheme {
 	return s.AnalyzeWithNormalizedText(text).Morphemes
 }
 
-// AnalyzeWithNormalizedText performs morphological analysis and also returns
+// AnalyzeWithNormalizedText tokenizes text and also returns
 // the normalized text that Morpheme.Start and Morpheme.End index into.
 func (s *Suzume) AnalyzeWithNormalizedText(text string) AnalysisResult {
 	var out AnalysisResult
